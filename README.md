@@ -5,9 +5,6 @@
 ## Prerequisite
 
 ### 1. Python (≥ 3.9)
-
-Install Python from [python.org](https://www.python.org/) or via conda.
-
 #### Python Packages
 
 ```bash
@@ -31,13 +28,6 @@ pip install numpy pandas scikit-learn xgboost scipy shap matplotlib joblib psuti
 ---
 
 ### 2. Node.js (≥ 18.0.0)
-
-Install Node.js from [nodejs.org](https://nodejs.org/).
-
-```bash
-node --version   # verify ≥ 18.0.0
-```
-
 #### JavaScript / Next.js Dependencies
 
 After cloning the repository, install all Node packages:
@@ -59,10 +49,6 @@ npm install
 ---
 
 ### 3. R (≥ 4.3)
-
-Install R from [CRAN](https://cran.r-project.org/).  
-[RStudio](https://posit.co/download/rstudio-desktop/) is recommended.
-
 #### R Packages
 
 Run the following in an R console to install all required packages at once:
