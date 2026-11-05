@@ -1,50 +1,30 @@
-# Reproduce the public demonstration
+# Usage guide
 
-Use the environment installed by `setup.bat` or `bash setup.sh`. On Windows the Python executable is `.venv/Scripts/python.exe`; on Linux/macOS it is `.venv/bin/python`.
+## 1. Run the demo
 
-## 1. Generate models and predictions
+From the repository root, run `setup.bat`, `run_ml_pipeline.bat`, then `start_malco_demo.bat`. In PowerShell, prefix each with `.\`; on Linux/macOS, use `bash` with the corresponding `.sh` files.
 
-Run `run_ml_pipeline.bat` (Windows) or `bash run_ml_pipeline.sh`. Alternatively:
+Outputs go to `output/demo/`: eight saved models, validation predictions, SHAP explanations and `demo_summary.json` with `completed_tasks: 8`. All example inputs and models are synthetic.
 
-```bash
-python scripts/run_demo.py
-```
+For Python commands below, use `.venv/Scripts/python.exe` on Windows or `.venv/bin/python` on Linux/macOS instead of `python`.
 
-Expected: eight model/metadata pairs in `output/demo/models/`, eight internal and eight synthetic evaluation prediction workbooks, eight ROC images, numerical SHAP and force plots in `output/demo/example_prediction/`, and `output/demo/demo_summary.json` with `completed_tasks: 8`.
+## 2. Try the API
 
-The generated patient, questionnaire and physician-rating examples are entirely synthetic software fixtures. Do not use them in manuscript result tables.
-
-Optional standalone imputation check:
-
-```bash
-python ml_prognostic_models/ensemble_imputation.py --input data/synthetic_sample.xlsx --output output/demo/imputed_sample.xlsx
-```
-
-## 2. Start the API
-
-Run `start_malco_demo.bat` or `bash start_malco_demo.sh`. The default URL is http://127.0.0.1:3000. The landing page is informational; the reproducibility workflow uses API requests.
-
-From another terminal at the repository root (use `curl.exe` in Windows PowerShell):
+Keep the service running. In another terminal at the repository root, run these requests in order (use `curl.exe` in PowerShell):
 
 ```bash
 curl http://127.0.0.1:3000/api/health
-curl -X POST http://127.0.0.1:3000/api/submit-answers -H "Content-Type: application/json" --data-binary @output/demo/input/patient_request.json
+curl -X POST http://127.0.0.1:3000/api/submit-answers -H "Content-Type: application/json" --data-binary '@output/demo/input/patient_request.json'
 curl "http://127.0.0.1:3000/api/chat?ref=demo001"
-curl -N -X POST "http://127.0.0.1:3000/api/chat?ref=demo001" -H "Content-Type: application/json" --data-binary @data/demo_message.json
-curl -X POST "http://127.0.0.1:3000/api/review?ref=demo001" -H "Content-Type: application/json" --data-binary "{}"
+curl -N -X POST "http://127.0.0.1:3000/api/chat?ref=demo001" -H "Content-Type: application/json" --data-binary '@data/demo_message.json'
+curl -X POST "http://127.0.0.1:3000/api/review?ref=demo001" -H "Content-Type: application/json" --data-binary '{}'
 ```
 
-Use a fresh `referenceKey` for each new intake; duplicates return 409. Chat messages arrive as SSE `data:` frames with `type: delta`, followed by `done` or `error`. Predictions include numerical `shap.contributions` sent to the conversation context. Review returns its mode and `review_complete`; demo results explicitly say no clinical safety assessment was performed. Failed live review requests return 502 with `Need Physician Review`.
+Use a new `referenceKey` for each intake. Chat streams `delta` then `done` or `error`; review reports `review_complete`. Duplicate keys or chatting after review return 409; incomplete live reviews return 502 and cannot pass. Session records are in `output/demo/sessions/`, with reviewed copies in `output/demo/archive/`.
 
-Session files live in `output/demo/sessions/<ref>/`; only that exact session's artifacts are copied into `output/demo/archive/<ref>/`. The original session remains readable.
+## 3. Run statistics
 
-Review closes a session to further chat messages (409); use a new session for a new conversation. Live responses must finish with `finish_reason: stop`. Truncated/filtered/incompletely terminated chat replies produce an SSE error and are not saved; truncated reviews return 502 and cannot pass.
-
-## 3. Run R examples
-
-Install R >=4.3, then restore the supplied dependency snapshot using the command in `statistical_analysis/setup.R` (R 4.5.2 was tested). If using an existing R library, set `R_LIBS_USER` to that library as usual.
-
-From the repository root:
+Use an existing compatible R library or restore dependencies with `Rscript statistical_analysis/setup.R`. Then run:
 
 ```bash
 Rscript statistical_analysis/DeLong_Test_analysis.R
@@ -53,28 +33,21 @@ Rscript statistical_analysis/questionnaire_results_analysis.R
 Rscript statistical_analysis/review_grade_ICC_analysis.R
 Rscript statistical_analysis/ablation_study_analysis.R
 Rscript statistical_analysis/ablation_study_analysis.R --design four-stage
-Rscript tests/statistics.R
 ```
 
-Expected outputs are under `output/demo/statistics/`: AUC comparison, ROC/KM plots, questionnaire plots, ICC workbook/plot, and the two-condition ablation plot plus `paired_tests.csv`. R scripts also print `sessionInfo()`.
+Results go to `output/demo/statistics/`. For your own data, use the scripts' `--input`/`--data-dir` and `--output-dir` options; see [Data format](data/DATA_FORMAT.md). The ROC/KM script accepts `--internal-dir` and `--external-dir`; KM requires matched event/time fields (`--event-column`, `--time-column`), or use `--km false` for ROC only.
 
-Use `--input`, `--data-dir`, `--internal-dir`, `--external-dir`, `--output-dir`/`--output` as applicable to supply other data. ROC uses binary outcomes and positive-class probabilities, with a fixed direction, and does not filter patients using follow-up data. The ROC/KM script defaults to `--task 5yrM --event-column True_Label --time-column Days_to_5yrM --ci-method delong`; time-column defaults follow the selected task. Verify that event/time fields describe the same endpoint and censoring horizon. Overall-mortality analysis requires explicitly matched event/time columns; `Death.24` is not assumed to match every endpoint. Use `--km false` for ROC alone. `--ci-method bootstrap` explicitly selects bootstrap intervals.
+Ablation uses two-sided paired Wilcoxon tests and Bonferroni correction across five comparisons (two conditions) or 30 (four stages). The CSV results and plot stars use the same adjusted P values.
 
-The default ablation design compares two conditions across five metrics: five tests. `--design four-stage` compares all six V1-V4 pairs across five metrics: 30 tests, corrected together before selecting the 15 adjacent comparisons for figure labels. Both designs require complete ratings from two raters of the same patients and average them within each patient/model/metric. Tests are two-sided paired Wilcoxon with a normal approximation, continuity correction, and no rounding before Bonferroni correction; identical pairs yield P=1. The plotted stars come only from `p.adj.signif` in `paired_tests.csv` (four-star convention documented in the figure). `mean_scores.csv` and `adjacent_tests.csv` are also exported.
+## 4. Optional live LLMs and checks
 
-The four-stage example reads generated `output/demo/input/ablation_four_stage.csv`. For your own ratings use `--design four-stage --input /path/to/ratings.csv --output-dir /path/to/results`; see DATA_FORMAT. Generated inputs are software fixtures and do not reproduce the manuscript's numerical results. Real study ratings are not bundled.
+Copy [.env.example](.env.example) to `malco_framework/.env.local`; set `MALCO_MODE=live`, `CHAT_BASE_URL`, `CHAT_API_KEY`, `CHAT_MODEL`, `REVIEW_BASE_URL`, `REVIEW_API_KEY` and three supported models in `REVIEW_MODELS`. Use OpenAI-compatible endpoints. Real-provider availability is not covered by offline testing.
 
-## 4. Live model configuration (optional)
+```bash
+python -m unittest discover -s tests -p test_pipeline.py -v
+node --test tests/api.test.mjs
+Rscript tests/statistics.R
+npm --prefix malco_framework run build
+```
 
-Copy `.env.example` to `malco_framework/.env.local`. Configure:
-
-- `MALCO_MODE=live`
-- `CHAT_BASE_URL`, `CHAT_API_KEY`, `CHAT_MODEL`
-- `REVIEW_BASE_URL`, `REVIEW_API_KEY` and provider-supported model identifiers in `REVIEW_MODELS` or `REVIEW_CONFIGURATIONS`
-- Optional `PYTHON_EXECUTABLE`, `MALCO_MODELS_DIR`, `MALCO_TASKS` and `MALCO_OUTPUT_DIR`
-
-All URLs must be actual OpenAI-compatible endpoints. Per-reviewer providers can use an `envPrefix` to select their own `<prefix>_BASE_URL` and `<prefix>_API_KEY`. The default timeout is 60 seconds per LLM call; Python inference has a 120-second limit. Offline and localhost-test success does not verify a real provider's availability.
-
-## 5. Prepare upload files
-
-`python scripts/package_release.py --output GitHub_Upload` creates a complete code-only release using an explicit allowlist and hash manifest. It excludes source manuscripts, real validation data, secrets, environments, dependencies, generated outputs and model weights. Review this folder before manually publishing; the packaging command does not contact GitHub.
+The optional imputation check requires first running `python ml_prognostic_models/ensemble_imputation.py --input data/synthetic_sample.xlsx --output output/demo/imputed_sample.xlsx`. See [Validation](VALIDATION.txt) for tested environments and remaining limits, and [Packaging](FILE_CHECKLIST.md) to prepare an upload folder.

@@ -1,5 +1,5 @@
 # Release packaging
 
-Run `python scripts/package_release.py --output GitHub_Upload` to assemble the complete reviewed code package. The command uses an explicit allowlist and writes RELEASE_MANIFEST.json with SHA256 values. It does not upload or push anything.
+Run `python scripts/package_release.py --output GitHub_Upload` using the project environment. It copies the approved code files and original synthetic sample, creates a SHA256 manifest, and does not upload anything.
 
-Real validation data, manuscript DOCX files, .env credentials, node_modules, .venv, .next, generated model weights and output data are excluded. The original public synthetic example is the only XLSX included.
+Clinical data, manuscripts, credentials, generated outputs, model weights and installed dependencies are excluded.
