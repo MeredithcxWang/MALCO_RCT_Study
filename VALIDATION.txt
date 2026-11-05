@@ -21,7 +21,7 @@ Limits:
 - Real LLM providers and historical model availability were not tested; only offline responses and a localhost test provider were used.
 - All generated model, patient, survey and rating examples are synthetic. The default demonstration reproduces no clinical performance or manuscript numerical results. A separate local ablation-only verification is described below.
 - The R dependency snapshot records 161 installed package versions; a complete fresh renv restore was not executed. R build tools may be required for archived packages.
-- Linux/macOS launch scripts and the added GitHub Actions workflow have not yet been run on their target services.
+- Linux/macOS launch scripts have not yet been run on their target systems. GitHub-hosted Windows validation is documented below.
 - Historical research pickle/scaler artifacts require separate provenance and compatibility validation. The newly generated JSON artifacts are not those research weights.
 - The public two-condition ablation script is distinct from the four-stage manuscript analysis.
 
@@ -35,3 +35,12 @@ Second-pass validation on 2026-11-05:
 - Separate local statistical verification with the previously identified rating workbooks reproduced 30 tests and matched all 15 adjacent labels in the inspected manuscript ablation image. Those inputs and outputs are excluded from this release, and this check does not independently authenticate rating provenance.
 
 The local validation did not include a GitHub push, public deployment or journal submission. See the repository's Actions page for subsequent checks on published commits.
+
+GitHub publication validation — 2026-11-05:
+- Code commit: 6307261d6da105ab43f5f612deea33fa303f81cb.
+- The main-branch Public demonstration workflow completed successfully on a clean GitHub-hosted Windows runner.
+- Locked Python dependencies, all eight synthetic model tasks, Node dependencies, all four Node integration groups, and the production build passed.
+- Python suite: 8 tests, 7 passed and 1 skipped. The skipped observed-value imputation check requires the separately generated imputation example; that check passed in the local validation described above.
+- R regression checks passed locally against the published files; R is not included in this hosted workflow.
+- Verification run: https://github.com/MeredithcxWang/MALCO_RCT_Study/actions/runs/42012741225
+- Later documentation-only changes do not modify the code tested by this run.

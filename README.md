@@ -1,5 +1,7 @@
 # MALCO heart-failure trial research code
 
+[![Public demonstration](https://github.com/MeredithcxWang/MALCO_RCT_Study/actions/workflows/demo.yml/badge.svg?branch=main)](https://github.com/MeredithcxWang/MALCO_RCT_Study/actions/workflows/demo.yml)
+
 **MALCO** (Multi-Agent LLM-powered Collaborative Outpatient Care) accompanies the manuscript *Multi-agent Large Language Model Framework Integrating Prognostic Machine Learning for Personalized Heart Failure Management: a Multi-center Randomized Controlled Trial*.
 
 This repository provides a runnable research demonstration: eight XGBoost prediction tasks, numerical SHAP explanations, a three-agent API workflow, and R analyses. **The default demonstration uses synthetic data and newly trained demonstration models.** Offline conversation and review responses are fixed, labelled test responses. Patient-level clinical data and the prognostic model weights used in the study are not included.
