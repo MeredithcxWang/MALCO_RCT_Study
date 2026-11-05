@@ -1,0 +1,37 @@
+if (.Platform$OS.type == "windows") suppressWarnings(Sys.setlocale("LC_CTYPE", "English_United States.utf8"))
+script <- sub("^--file=", "", grep("^--file=", commandArgs(FALSE), value=TRUE)[1])
+root <- dirname(dirname(normalizePath(script, winslash="/")))
+source(file.path(root, "statistical_analysis/paired_scores.R"))
+source(file.path(root, "statistical_analysis/roc_inputs.R"))
+rejects <- function(expression) stopifnot(inherits(tryCatch(force(expression), error=identity), "error"))
+models <- paste0("V", 1:4)
+metrics <- c("Accuracy", "Safety", "Completeness", "Personalization", "Adherence")
+set.seed(42)
+ratings <- expand.grid(PatientID=sprintf("ID%03d", 1:30), Rater=c("R1","R2"), Model=models, Metric=metrics, stringsAsFactors=FALSE)
+ratings$Score <- sample(1:5, nrow(ratings), replace=TRUE)
+means <- patient_means(ratings, models, metrics)
+result <- paired_family(means, models, metrics)
+stopifnot(nrow(result)==30L, sum(result$incremental)==15L, all(result$family_size==30L),
+          identical(result$p.adj, pmin(result$p*30, 1)))
+shuffled <- ratings[sample(nrow(ratings)), ]
+stopifnot(isTRUE(all.equal(result, paired_family(patient_means(shuffled, models, metrics), models, metrics))))
+bad <- ratings; bad$PatientID[bad$Rater == "R2"] <- paste0("Other-", bad$PatientID[bad$Rater == "R2"])
+rejects(patient_means(bad, models, metrics))
+rejects(patient_means(rbind(ratings, ratings[1, ]), models, metrics))
+rejects(patient_means(ratings[-1, ], models, metrics))
+stopifnot(identical(significance_stars(c(.0001,.001,.01,.05,.05000001)), c("****","***","**","*","ns")))
+identical_scores <- ratings; identical_scores$Score <- 3
+stopifnot(all(paired_family(patient_means(identical_scores, models, metrics), models, metrics)$p == 1))
+two <- paired_family(means[means$Model %in% c("V1","V2"), ], c("V1","V2"), metrics)
+stopifnot(all(two$family_size == 5), identical(two$p.adj, pmin(two$p*5,1)))
+
+# No time-to-event data are needed to assess binary discrimination.
+df <- data.frame(True_Label=c(0,0,1,1), Predicted_Probability=c(.9,.8,.2,.1))
+roc <- roc_inputs(df)
+stopifnot(as.numeric(pROC::auc(fixed_probability_roc(roc$standard_status, roc$standard_prob))) == 0)
+# The old automatic direction gives 1 for exactly these reversed probabilities.
+stopifnot(as.numeric(pROC::auc(pROC::roc(df$True_Label, df$Predicted_Probability, quiet=TRUE))) == 1)
+bad <- df; bad$Predicted_Probability[1] <- NA; rejects(roc_inputs(bad))
+df$Time <- c(1,2,3,4); df$Predicted_Class <- c(1,1,0,0); df$Event <- c(0,1,.5,0)
+rejects(km_inputs(df, "Time", "Event"))
+cat("PASS: complete paired panels, order invariance, 5/30-test families, stars, identical pairs, fixed ROC direction, and KM validation\n")

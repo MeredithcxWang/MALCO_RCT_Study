@@ -9,6 +9,11 @@
 
 rm(list = ls())
 
+if (.Platform$OS.type == "windows") suppressWarnings(Sys.setlocale("LC_CTYPE", "English_United States.utf8"))
+script_file <- sub("^--file=", "", grep("^--file=", commandArgs(FALSE), value=TRUE)[1])
+source(file.path(dirname(script_file), "common.R"), encoding="UTF-8")
+
+
 required_packages <- c("readxl", "ggplot2", "dplyr", "ggpubr")
 for (pkg in required_packages) {
   if (!requireNamespace(pkg, quietly = TRUE)) {
@@ -19,14 +24,14 @@ for (pkg in required_packages) {
 
 options(scipen = 999)
 
-# Parameters 
-Col_Pre  <- "S24"       # Column name for the pre-intervention survey item
-Col_Post <- "S25"       # Column name for the post-intervention survey item
+# Parameters
+Col_Pre <- option("pre-column", "S24")       # Column name for the pre-intervention survey item
+Col_Post <- option("post-column", "S25")       # Column name for the post-intervention survey item
 Keyword  <- "AI cred"   # Label used in plot title and output file name
 
 # Paths
-file_path  <- "data/survey_data.xlsx"   # Input survey data file
-output_dir <- "output/figures"          # Output directory for figures
+file_path <- absolute_path(option("input", file.path(input_root,"survey_data.xlsx")))   # Input survey data file
+output_dir <- absolute_path(option("output-dir", file.path(demo_root,"statistics","survey")))          # Output directory for figures
 
 if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
 
@@ -53,7 +58,7 @@ plot_data$Group_Match <- factor(plot_data$Group_Match,
                                 levels = c("pre", "post"),
                                 labels = c("Pre", "Post"))
 
-# 2. Statistical test 
+# 2. Statistical test
 message(paste0("--- [", Keyword, "] Wilcoxon rank-sum test (Pre vs Post) ---"))
 
 stat_result <- compare_means(Score ~ Group_Match,
@@ -61,7 +66,7 @@ stat_result <- compare_means(Score ~ Group_Match,
                              method = "wilcox.test")
 print(stat_result)
 
-# 3. Visualization 
+# 3. Visualization
 my_colors <- c("Pre" = "#B24745", "Post" = "#2E5F87")
 
 p <- ggplot(plot_data, aes(x = Group_Match, y = Score, fill = Group_Match)) +
@@ -106,7 +111,7 @@ p <- ggplot(plot_data, aes(x = Group_Match, y = Score, fill = Group_Match)) +
        title = paste(Keyword, "Comparison"))
 
 # 4. Save output
-print(p)
+if (interactive()) print(p)
 
 file_name_pdf <- paste0("Violin_PrePost_", Keyword, ".pdf")
 file_name_png <- paste0("Violin_PrePost_", Keyword, ".png")

@@ -1,203 +1,79 @@
-# Data Format Specification
+# Data contracts
 
-## Overview
+`schema.json` is the authoritative ordered list of **41 clinical predictor columns**. Training and evaluation also require the selected binary task column. Event-time fields are optional for prediction, but required for time-to-event figures. Neither outcome nor time-to-event columns can enter the predictor matrix.
 
-This document describes the input data format required by the MALCO framework's machine learning pipeline and inference engine. All patient data files must follow this schema for compatibility with the XGBoost models and three-agent system.
+The original `synthetic_sample.xlsx` has 100 rows and 43 columns: 41 predictors, `2yrM`, and `Days_to_2yrM`. These are not 43 predictors. It remains unchanged.
 
----
+Task names: `2yrM`, `3yrM`, `4yrM`, `5yrM`, `Cancer`, `COPD`, `Pneumonia`, `rehos`. `rehospitalization` is accepted as a command-line alias for `rehos`; data columns use `rehos` and `Days_to_rehos`.
 
-## File Format Requirements
+All 41 feature columns must be present, numeric, and in the documented units of the source dataset. Individual cells may be missing (blank/NaN). Entirely empty patient rows and nonnumeric/infinite values are rejected. No automatic unit conversion is applied; source units, including albumin, must be verified for research use.
 
-- **Supported formats**: Excel (`.xlsx`) or CSV (`.csv`)
-- **Encoding**: UTF-8
-- **Row structure**: One patient per row
-- **Column structure**: 41 clinical features + 2 outcome variables (for training data)
+API answers map `Q1`–`Q41` to `schema.json` in order. Missing answers become blank cells. `A` and `B` are retained as aliases for 1 and 0; numerical JSON values are preferred. Supply `referenceKey` using 1–128 letters, digits, underscores or hyphens.
 
-**Sample file provided**: `synthetic_sample.xlsx` contains 100 synthetically generated patient profiles demonstrating the exact format expected by the pipeline.
+All generated files under `output/demo/input/` are synthetic, including the apparent physician ratings. Their IDs identify synthetic rows, not patients. Training and evaluation samples use separate random seeds. Event/censoring times are artificial and cannot support clinical inference.
 
----
+Prediction files are named `<task>_prediction_results.xlsx` and use `True_Label`, `Predicted_Probability` and `Predicted_Class`. Internal and supplied-evaluation files use the same schema. R analysis-specific inputs and generation details are in `generate_synthetic_data.py`; see QUICKSTART for paths.
 
-## Feature Schema (41 Clinical Features)
+The model metadata states the preprocessing, ordered predictors, threshold and synthetic status. Older research pickle/scaler pairs are not silently converted into the new format.
+
+## Four-stage ablation ratings
+
+Use a CSV with columns `PatientID,Rater,Model,Metric,Score`, one integer score (1-5) per row. PatientID is a stable deidentified string. There must be exactly two raters and one rating from each for every patient, model and metric. Duplicate keys, missing ratings and differing patient sets are errors; row order does not define pairing.
+
+Models: `V1` (Gemini baseline), `V2` (+ safety prompt), `V3` (+ ML raw data), `V4` (+ SHAP). Metrics: `Accuracy`, `Safety`, `Completeness`, `Personalization`, `Adherence` (guideline-adherence rating, not trial medication PDC). The script averages raters within patient, calculates all 30 pairwise tests, applies one Bonferroni family, then selects adjacent comparisons for labels. Actual study data require independent provenance verification; changing column labels does not establish provenance.
+
+## Predictor descriptions retained from the source
+
+The ranges below describe the supplied synthetic example, not validated clinical acceptance limits. Verify source units before any research use.
 
 ### 1. Demographics (2 features)
-
-| Feature Name | Type | Description | Range/Values |
-|-------------|------|-------------|--------------|
-| `use.Sex` | Binary | Sex | 0 = Female, 1 = Male |
-| `use.age` | Continuous | Age in years | 50–95 |
-
----
+- `use.Sex`: Binary (0=Female, 1=Male)
+- `use.age`: Continuous (range: 50-95 years)
 
 ### 2. Lifestyle & Comorbidities (13 features)
-
-All binary features (0 = No/Absent, 1 = Yes/Present):
-
-| Feature Name | Description |
-|-------------|-------------|
-| `use.Alcohol` | Alcohol consumption |
-| `use.Smoke` | Smoking status |
-| `use.HT` | Hypertension |
-| `use.DM` | Diabetes mellitus |
-| `use.obesity` | Obesity (BMI ≥ 30 kg/m²) |
-| `use.CAD` | Coronary artery disease |
-| `use.PVD` | Peripheral vascular disease |
-| `use.AF` | Atrial fibrillation |
-| `use.DL` | Dyslipidemia |
-| `use.Anemia` | Anemia |
-| `use.cirrhosis` | Liver cirrhosis |
-| `use.parkinson` | Parkinson's disease |
-| `use.rheumatism` | Rheumatic disease |
-
----
+All binary (0=No, 1=Yes):
+- `use.Alcohol`: Alcohol consumption
+- `use.Smoke`: Smoking status
+- `use.HT`: Hypertension
+- `use.DM`: Diabetes mellitus
+- `use.obesity`: Obesity (BMI ≥ 30)
+- `use.CAD`: Coronary artery disease
+- `use.PVD`: Peripheral vascular disease
+- `use.AF`: Atrial fibrillation
+- `use.DL`: Dyslipidemia
+- `use.Anemia`: Anemia
+- `use.cirrhosis`: Liver cirrhosis
+- `use.parkinson`: Parkinson's disease
+- `use.rheumatism`: Rheumatic disease
 
 ### 3. Pharmacotherapy (7 features)
-
-All binary features (0 = Not prescribed, 1 = Prescribed):
-
-| Feature Name | Description |
-|-------------|-------------|
-| `use.ACEI.base` | ACE inhibitors at baseline |
-| `use.ARB.base` | Angiotensin receptor blockers at baseline |
-| `use.Bblocker.base` | Beta-blockers at baseline |
-| `use.ASA.base` | Aspirin at baseline |
-| `use.CCB.base` | Calcium channel blockers at baseline |
-| `use.duretics.base` | Diuretics at baseline |
-| `statin_base` | Statins at baseline |
-
----
+All binary (0=Not prescribed, 1=Prescribed):
+- `use.ACEI.base`: ACE inhibitors
+- `use.ARB.base`: Angiotensin receptor blockers
+- `use.Bblocker.base`: Beta-blockers
+- `use.ASA.base`: Aspirin
+- `use.CCB.base`: Calcium channel blockers
+- `use.duretics.base`: Diuretics
+- `statin_base`: Statins
 
 ### 4. Laboratory Parameters (19 features)
-
-All continuous features, may contain missing values (represented as `NaN` in Excel or empty cells in CSV):
-
-| Feature Name | Description | Unit | Typical Range |
-|-------------|-------------|------|--------------|
-| `Hemoglobin.base.value` | Hemoglobin | g/dL | 8–16 |
-| `HbA1c.base.value` | Glycated hemoglobin | % | 4.5–12 |
-| `Glucose.base.value` | Blood glucose | mmol/L | 4–15 |
-| `Creatinie.base.value` | Creatinine | μmol/L | 50–250 |
-| `Lymph.base.value` | Lymphocyte count | 10⁹/L | 0.5–4 |
-| `Neurophil.base.value` | Neutrophil count | 10⁹/L | 2–15 |
-| `calcu.TSAT.all` | Transferrin saturation (calculated) | % | 10–50 |
-| `TIBC.base.result` | Total iron-binding capacity | μmol/L | 20–80 |
-| `Iron.base.Result` | Serum iron | μmol/L | 3–30 |
-| `FerritinugL` | Ferritin | μg/L | 50–2000 |
-| `CRP.value` | C-reactive protein | mg/L | 1–50 |
-| `Iron.saturation.value` | Iron saturation | % | 10–50 |
-| `use.TG.base.result` | Triglycerides | mmol/L | 0.5–5 |
-| `mean.BMI` | Body mass index | kg/m² | 18–35 |
-| `use.ALT.base.result` | Alanine aminotransferase | U/L | 5–80 |
-| `LDL.1y.Numeric.Result` | LDL cholesterol | mmol/L | 1.5–5 |
-| `Albumin_Result` | Serum albumin | g/L | 2.5–5 |
-| `AST` | Aspartate aminotransferase | U/L | 15–100 |
-| `eGFR` | Estimated glomerular filtration rate | mL/min/1.73m² | 15–120 |
-
----
-
-### 5. Outcome Variables (for training data only)
-
-For **model training and validation**, include outcome columns corresponding to the prediction task:
-
-**Example: 2-year mortality prediction**
-- `Days_to_2yrM`: Time to event or censoring (days, range: 30–730)
-- `2yrM`: 2-year mortality outcome (0 = Alive/Censored, 1 = Deceased)
-
-**Other prediction tasks:** Replace with corresponding outcome variables:
-- 3-year mortality: `Days_to_3yrM`, `3yrM`
-- 4-year mortality: `Days_to_4yrM`, `4yrM`
-- 5-year mortality: `Days_to_5yrM`, `5yrM`
-- Cancer: `Days_to_Cancer`, `Cancer`
-- COPD: `Days_to_COPD`, `COPD`
-- Pneumonia: `Days_to_Pneumonia`, `Pneumonia`
-- Rehospitalization: `Days_to_rehospitalization`, `rehospitalization`
-
-
----
-
-## Missing Data Handling
-
-- **Representation**: Missing values should be encoded as `NaN` (Excel) or left as empty cells (CSV)
-- **Imputation**: The ML pipeline uses ensemble imputation (KNN + IterativeImputer + PCA) before model training
-- **Implementation**: See `ml_prognostic_models/ensemble_imputation.py`
-
-**Important**: XGBoost models in the MALCO framework handle missing values natively during inference via the `missing=np.nan` parameter, so raw patient data can be submitted to the Patient Portfolio Agent without pre-imputation.
-
----
-
-## Column Naming Conventions
-
-Understanding the naming patterns helps when preparing new datasets:
-
-- **`.base` suffix**: Baseline measurement at hospital admission (e.g., `Hemoglobin.base.value`)
-- **`.value` / `.result` / `.Result`**: Numeric laboratory results
-- **`use.` prefix**: Clinical usage indicators (medications, conditions)
-- **`calcu.` prefix**: Calculated or derived features (e.g., `calcu.TSAT.all`)
-
-**Critical**: Column names are **case-sensitive** and must match exactly. The XGBoost models were trained with these exact feature names.
-
----
-
-## Data Privacy & Ethical Constraints
-
-### Synthetic Sample Data
-
-The provided file **`synthetic_sample.xlsx`** contains **100 synthetically generated patient profiles** created for demonstration and testing purposes. These profiles:
-- Were generated using statistical distributions derived from the real cohort
-- Do **NOT** represent actual patients
-- Are provided to enable code testing and methodological review
-
-### Real Patient Data (Not Included)
-
-The actual clinical data used in the published trial results:
-- Contains **protected health information (PHI)** under HIPAA and local privacy regulations
-- Is governed by **IRB Protocol** and institutional data use agreements
-- **Cannot be publicly shared** due to ethical and legal constraints
-- May be accessible through **controlled data access** for qualified researchers who:
-  - Have IRB approval from their institution
-  - Sign a data use agreement with the data custodian
-  - Provide a scientifically justified analysis plan
-
----
-
-## Validation Checklist
-
-Before running the ML pipeline or MALCO framework on new data, verify:
-
-- [ ] **All 41 feature columns are present** with exact names (case-sensitive)
-- [ ] **Binary features** contain only `0`, `1`, or `NaN` (no other values)
-- [ ] **Continuous features** are numeric and within plausible clinical ranges
-- [ ] **Outcome variables** (if included for training) are properly coded (0/1)
-- [ ] **No duplicate patient records** (check for duplicate IDs if present)
-- [ ] **File encoding is UTF-8** (avoid Excel's legacy encodings)
-- [ ] **No formula injection vulnerabilities** (CSV cells should not start with `=`, `+`, `-`, `@`)
-
----
-
-## Integration with MALCO Framework
-
-### For Training (ML Pipeline)
-1. Place training data files in `ml_prognostic_models/data/`
-2. Ensure outcome columns are included
-3. Run `ensemble_imputation.py` → `xgboost_training.py` → `model_evaluation.py`
-
-### For Inference (Patient Portfolio Agent)
-1. Patient data submitted via questionnaire (41 features, no outcome columns)
-2. Patient Portfolio Agent maps questionnaire responses to feature names
-3. Single-row CSV generated and passed to `run_models.py`
-4. Python subprocess loads trained models and generates predictions + SHAP plots
-5. Results returned to frontend via JSON
-
-**Reference**: See `malco_framework/patient_portfolio_agent.js` for the `FEATURE_MAP` object that maps questionnaire items (Q1–Q41) to these feature names.
-
----
-
-
-## Additional Resources
-
-- **Feature engineering details**: See manuscript Methods section, Table 1
-- **Imputation algorithm**: `ml_prognostic_models/ensemble_imputation.py`
-- **Model training code**: `ml_prognostic_models/xgboost_training.py`
-- **Questionnaire mapping**: `malco_framework/patient_portfolio_agent.js` (`FEATURE_MAP` object)
-- **SHAP explainability**: `malco_framework/run_models.py` (SHAP force plot generation)
-
----
+All continuous, may contain missing values (NaN):
+- `Hemoglobin.base.value`: g/dL (range: 8-16)
+- `HbA1c.base.value`: % (range: 4.5-12)
+- `Glucose.base.value`: mmol/L (range: 4-15)
+- `Creatinie.base.value`: μmol/L (range: 50-250)
+- `Lymph.base.value`: 10⁹/L (range: 0.5-4)
+- `Neurophil.base.value`: 10⁹/L (range: 2-15)
+- `calcu.TSAT.all`: Transferrin saturation % (range: 10-50)
+- `TIBC.base.result`: μmol/L (range: 20-80)
+- `Iron.base.Result`: μmol/L (range: 3-30)
+- `FerritinugL`: μg/L (range: 50-2000)
+- `CRP.value`: mg/L (range: 1-50)
+- `Iron.saturation.value`: % (range: 10-50)
+- `use.TG.base.result`: Triglycerides, mmol/L (range: 0.5-5)
+- `mean.BMI`: kg/m² (range: 18-35)
+- `use.ALT.base.result`: U/L (range: 5-80)
+- `LDL.1y.Numeric.Result`: mmol/L (range: 1.5-5)
+- `Albumin_Result`: original synthetic numeric range 2.5-5; source unit requires verification. No conversion is applied.
+- `AST`: U/L (range: 15-100)
+- `eGFR`: mL/min/1.73m² (range: 15-120)

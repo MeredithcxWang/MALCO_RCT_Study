@@ -1,3 +1,11 @@
+from pathlib import Path
+import sys
+import os
+os.environ.setdefault("LOKY_MAX_CPU_COUNT", "1")
+import argparse
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from malco_core import FEATURES, resolve_path, read_table, feature_frame, write_table
+import os
 import numpy as np
 import pandas as pd
 from sklearn.experimental import enable_iterative_imputer
@@ -53,6 +61,7 @@ def cpu_impute_process(
                 X_test = df_scaled.loc[mask, feature_cols]
 
                 if not X_train.empty and not X_test.empty:
+                    knn_regressor.set_params(n_neighbors=min(knn_neighbors, len(X_train)))
                     knn_regressor.fit(X_train, y_train)
                     knn_imputed_scaled.loc[mask, col] = knn_regressor.predict(X_test)
 
@@ -79,7 +88,7 @@ def cpu_impute_process(
         )[cols_to_fill]
 
         # 3. PCA-based Imputation
-        n_comp = min(pca_n_components, len(all_impute_columns))
+        n_comp = min(pca_n_components, len(all_impute_columns), len(df_scaled))
         pca = PCA(n_components=n_comp, random_state=42)
         pca_reconstructed = pca.inverse_transform(pca.fit_transform(df_scaled))
 
@@ -104,8 +113,7 @@ def cpu_impute_process(
         return process_id, result_part
 
     except Exception as e:
-        print(f"Error in Process {process_id}: {str(e)}")
-        return process_id, df_full[cols_to_fill].copy()
+        raise RuntimeError(f"Imputation worker {process_id} failed: {e}") from e
 
 
 def ensemble_imputation_custom(df, columns_to_impute, weights=None):
@@ -113,7 +121,15 @@ def ensemble_imputation_custom(df, columns_to_impute, weights=None):
     if weights is None:
         weights = [0.33, 0.34, 0.33]
 
-    cpu_count = psutil.cpu_count(logical=True)
+    if not columns_to_impute:
+        return df.copy()
+    if any(c.startswith("Days_to_") or c not in FEATURES for c in columns_to_impute):
+        raise ValueError("Only declared predictor columns may be imputed")
+    if df[columns_to_impute].isna().all().any():
+        raise ValueError("Cannot impute an entirely missing feature")
+    if len(weights) != 3 or any(w < 0 for w in weights) or not np.isclose(sum(weights), 1):
+        raise ValueError("Three nonnegative weights summing to one are required")
+    cpu_count = min(4, psutil.cpu_count(logical=True) or 1)
     num_splits = min(cpu_count, len(columns_to_impute))
     columns_split = np.array_split(columns_to_impute, num_splits)
 
@@ -127,7 +143,7 @@ def ensemble_imputation_custom(df, columns_to_impute, weights=None):
                 cpu_impute_process,
                 i,
                 df,
-                columns_to_impute,
+                FEATURES,
                 col_part.tolist(),
                 weights,
                 5,
@@ -146,19 +162,24 @@ def ensemble_imputation_custom(df, columns_to_impute, weights=None):
         if i in results:
             imputed_df.update(results[i])
 
+    if imputed_df[columns_to_impute].isna().any().any():
+        raise ValueError("Imputation left missing values")
     return imputed_df
 
 
-if __name__ == "__main__":
-    # Load dataset
-    df = pd.read_csv("data.csv")
 
-    # Specify columns that need imputation
-    cols_to_impute = df.columns[df.isnull().any()].tolist()
-
-    # Run ensemble imputation
-    df_imputed = ensemble_imputation_custom(df, cols_to_impute)
-
-    # Save result
-    df_imputed.to_csv("imputed_data.csv", index=False)
-    print("Done.")
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Standalone ensemble-imputation demonstration; do not fit on validation/test data.')
+    parser.add_argument('--input', default='data/synthetic_sample.xlsx')
+    parser.add_argument('--output', default='output/demo/imputed_sample.xlsx')
+    args = parser.parse_args()
+    try:
+        df = read_table(resolve_path(args.input))
+        X = feature_frame(df)
+        columns = X.columns[X.isna().any()].tolist()
+        imputed = ensemble_imputation_custom(X, columns)
+        df.loc[:, FEATURES] = imputed
+        write_table(df, resolve_path(args.output))
+        print(f'Imputed {len(columns)} predictor columns; outcomes unchanged.')
+    except Exception as exc:
+        parser.exit(1, f'Imputation failed: {exc}\n')

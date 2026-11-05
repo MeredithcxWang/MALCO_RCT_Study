@@ -10,6 +10,11 @@
 
 rm(list = ls())
 
+if (.Platform$OS.type == "windows") suppressWarnings(Sys.setlocale("LC_CTYPE", "English_United States.utf8"))
+script_file <- sub("^--file=", "", grep("^--file=", commandArgs(FALSE), value=TRUE)[1])
+source(file.path(dirname(script_file), "common.R"), encoding="UTF-8")
+
+
 required_packages <- c("tidyverse", "readxl", "openxlsx", "irr", "ggsci", "scales")
 for (pkg in required_packages) {
   if (!requireNamespace(pkg, quietly = TRUE)) {
@@ -20,9 +25,9 @@ for (pkg in required_packages) {
 
 # Parameters
 
-# Paths 
-data_dir   <- "data/grades"       # Folder containing FINAL_*.xlsx rater files
-output_dir <- "output/icc"        # Folder for saving results
+# Paths
+data_dir <- absolute_path(option("data-dir", file.path(input_root,"grades")))       # Folder containing FINAL_*.xlsx rater files
+output_dir <- absolute_path(option("output-dir", file.path(demo_root,"statistics","icc")))        # Folder for saving results
 
 if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
 
@@ -49,11 +54,14 @@ col_mapping <- c(
   "Adherence to Guidelines (Likert 1~5)" = "Adherence"
 )
 
-df_clean <- raw_data %>% rename(any_of(col_mapping))
+df_clean <- raw_data %>% rename(any_of(setNames(names(col_mapping), unname(col_mapping))))
 
 # Retain only metrics that exist in the data
-analysis_metrics <- names(col_mapping)
+analysis_metrics <- unname(col_mapping)
 analysis_metrics <- analysis_metrics[analysis_metrics %in% names(df_clean)]
+
+if (length(analysis_metrics)==0) stop("No score columns found")
+if (anyDuplicated(df_clean[c("Patient ID","Rater")])) stop("Duplicate patient/rater pairs")
 
 # 2. Compute ICC(2,k) for each metric
 
@@ -95,6 +103,8 @@ for (metric in analysis_metrics) {
                   formatC(icc_obj$p.value, format = "g", digits = 4)))
 }
 
+if (nrow(icc_results)==0) stop("No ICC results computed")
+
 # 3. Export results to Excel
 
 export_table <- icc_results %>%
@@ -103,7 +113,7 @@ export_table <- icc_results %>%
 output_excel_path <- file.path(output_dir, "ICC_Results.xlsx")
 write.xlsx(export_table, output_excel_path)
 
-# 4. Visualization 
+# 4. Visualization
 
 plot_data <- icc_results %>%
   mutate(Metric = fct_reorder(Metric, ICC))

@@ -1,0 +1,37 @@
+MALCO public-code repair validation — 2026-11-05
+
+Source: user-specified local folder MALCO-Heart-Failure-Trial - Copy; no Git metadata present.
+Public baseline checked: 9e162d3a83ca931909f3542560ded9298a3fcc54.
+
+Verified in an isolated copy on Windows 11:
+- Fresh Node installation with npm ci using the included lockfile.
+- Fresh Python 3.13.5 virtual environment with the complete pinned wheel set.
+- Eight synthetic training tasks: models saved, reloaded and evaluated; single-patient predictions and SHAP plots generated.
+- Python regression checks: target/time exclusion, feature order, missing-column rejection, empty-patient rejection, artifact checks, SHAP additivity, failure exit codes, and imputation preservation.
+- Node integration checks: full offline API flow with real Python inference, valid SSE, SHAP content, archive isolation, invalid input, exact verdict parsing, live-adapter veto and request failure against a localhost test service.
+- Next.js production build with all four API routes registered.
+- Actual localhost HTTP sequence: health, intake (8 predictions), chat initialization, SSE message, review. Every stage returned 200 in explicit demo mode.
+- All five R analyses executed against generated synthetic fixtures using the existing R 4.5.2 library, producing workbooks/plots/paired-tests CSV.
+- Standalone imputation of the original public synthetic sample completed; original outcomes and observed feature values preserved.
+- Original public synthetic workbook unchanged.
+
+Dependency versions used for the clean Python run include numpy 2.1.3, pandas 2.2.3, scikit-learn 1.6.1, xgboost 3.0.1, scipy 1.15.3, shap 0.48.0, psutil 5.9.8. See requirements.lock.txt for the complete set. Next.js 15.5.20, React 19.2.7, OpenAI SDK 4.104.0 and Node.js 24.13.0 were tested.
+
+Limits:
+- Real LLM providers and historical model availability were not tested; only offline responses and a localhost test provider were used.
+- All generated model, patient, survey and rating examples are synthetic. The default demonstration reproduces no clinical performance or manuscript numerical results. A separate local ablation-only verification is described below.
+- The R dependency snapshot records 161 installed package versions; a complete fresh renv restore was not executed. R build tools may be required for archived packages.
+- Linux/macOS launch scripts and the added GitHub Actions workflow have not yet been run on their target services.
+- Historical research pickle/scaler artifacts require separate provenance and compatibility validation. The newly generated JSON artifacts are not those research weights.
+- The public two-condition ablation script is distinct from the four-stage manuscript analysis.
+
+Second-pass validation on 2026-11-05:
+- Eight Python tests pass, including canonical artifact alias loading.
+- Four Node integration groups pass, including truncated/filtered/unterminated live-stream simulations, truncated reviews, reviewed-session closure and malformed/null JSON.
+- R regression checks pass for complete rating panels, patient-order invariance, five/30-test Bonferroni families, star boundaries, identical scores, fixed positive-class ROC direction, and event validation.
+- Two-condition and newly added four-stage synthetic analyses run; mismatched rater patient sets fail as intended.
+- ROC/KM runs with internal input containing no survival columns; KM reads external follow-up only.
+- A one-candidate non-demo search using only synthetic data saves successfully; this is a software check, not a clinical fit.
+- Separate local statistical verification with the previously identified rating workbooks reproduced 30 tests and matched all 15 adjacent labels in the inspected manuscript ablation image. Those inputs and outputs are excluded from this release, and this check does not independently authenticate rating provenance.
+
+The local validation did not include a GitHub push, public deployment or journal submission. See the repository's Actions page for subsequent checks on published commits.

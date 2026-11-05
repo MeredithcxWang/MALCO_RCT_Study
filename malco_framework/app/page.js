@@ -1,0 +1,1 @@
+export default function Home(){return <main><h1>MALCO reproducibility demo</h1><p>Synthetic data and offline test responses. Not a clinical service.</p><p>Use the API walkthrough in QUICKSTART.md to submit a sample, initialize a chat and run the review panel.</p></main>;}

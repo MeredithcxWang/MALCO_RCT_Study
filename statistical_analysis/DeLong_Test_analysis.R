@@ -11,7 +11,12 @@
 
 rm(list = ls())
 
-required_packages <- c("pROC", "readxl", "openxlsx")
+if (.Platform$OS.type == "windows") suppressWarnings(Sys.setlocale("LC_CTYPE", "English_United States.utf8"))
+script_file <- sub("^--file=", "", grep("^--file=", commandArgs(FALSE), value=TRUE)[1])
+source(file.path(dirname(script_file), "common.R"), encoding="UTF-8")
+
+
+required_packages <- c("pROC", "readxl", "openxlsx", "dplyr")
 for (pkg in required_packages) {
   if (!requireNamespace(pkg, quietly = TRUE)) {
     stop(paste0("Package '", pkg, "' is required but not installed."))
@@ -21,10 +26,10 @@ for (pkg in required_packages) {
 
 # Parameters
 
-# Paths 
-internal_base <- "data/internal_train"        # Folder with internal validation subfolders
-external_base <- "data/external_validation"   # Folder with external validation subfolders
-output_path   <- "output/AUC_Comparison.xlsx" # Output Excel file path
+# Paths
+internal_base <- absolute_path(option("internal-dir", file.path(demo_root,"internal")))        # Folder with internal validation subfolders
+external_base <- absolute_path(option("external-dir", file.path(demo_root,"external")))   # Folder with external validation subfolders
+output_path <- absolute_path(option("output", file.path(demo_root,"statistics","AUC_Comparison.xlsx"))) # Output Excel file path
 
 # Ensure output directory exists
 output_dir <- dirname(output_path)
@@ -59,8 +64,7 @@ for (folder in folders) {
 
   # Check file existence
   if (!file.exists(int_file) || !file.exists(ext_file)) {
-    message(sprintf("Skipped '%s': internal or external result file not found.", folder))
-    next
+    stop(sprintf("Missing prediction file for %s", folder))
   }
 
   tryCatch({
@@ -70,8 +74,8 @@ for (folder in folders) {
     ext_data <- read_excel(ext_file)
 
     # Extract true labels and predicted probabilities
-    int_true <- int_data$True_Values
-    int_prob <- int_data$Predicted_Probabilities
+    int_true <- int_data$True_Label
+    int_prob <- int_data$Predicted_Probability
 
     ext_true <- ext_data$True_Label
     ext_prob <- ext_data$Predicted_Probability
@@ -93,7 +97,7 @@ for (folder in folders) {
     test_res <- roc.test(roc_int, roc_ext, method = "delong", paired = FALSE)
     pval <- test_res$p.value
 
-    sig <- case_when(
+    sig <- dplyr::case_when(
       pval < 0.001 ~ "***",
       pval < 0.01  ~ "**",
       pval < 0.05  ~ "*",
@@ -116,9 +120,11 @@ for (folder in folders) {
                     formatC(pval, format = "g", digits = 3), sig))
 
   }, error = function(e) {
-    message(sprintf("Error processing '%s': %s", folder, e$message))
+    stop(sprintf("Error processing %s: %s", folder, e$message))
   })
 }
+
+if (nrow(results_df) == 0) stop("No tasks completed; no result table exported.")
 
 # 3. Export results to Excel
 
