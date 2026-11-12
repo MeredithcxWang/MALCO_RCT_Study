@@ -47,7 +47,7 @@ results_df <- data.frame(
   Task_Name          = character(),
   Internal_AUC_95CI  = character(),
   External_AUC_95CI  = character(),
-  DeLong_Z_Statistic = numeric(),
+  DeLong_statistic   = numeric(),
   P_Value            = numeric(),
   Significance       = character(),
   stringsAsFactors   = FALSE
@@ -109,7 +109,7 @@ for (folder in folders) {
       Task_Name          = folder,
       Internal_AUC_95CI  = int_auc_str,
       External_AUC_95CI  = ext_auc_str,
-      DeLong_Z_Statistic = round(test_res$statistic, 3),
+      DeLong_statistic   = round(test_res$statistic, 3),
       P_Value            = signif(pval, 3),
       Significance       = sig
     ))
